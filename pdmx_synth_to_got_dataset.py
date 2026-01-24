@@ -2,6 +2,7 @@ import os
 import json
 import functools
 from datasets import load_dataset
+from huggingface_hub import snapshot_download
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor
 
@@ -53,13 +54,29 @@ def main():
     global dataset
 
     print("Loading dataset (streaming/mapping)...")
-    try:
-        # We load the dataset here so it's available in the parent memory space
-        dataset = load_dataset("guangyangmusic/PDMX-Synth")
-    except Exception as e:
-        print(f"Error loading dataset: {e}")
-        return
+    local_data_path = "./hf_cache"
 
+    snapshot_download(
+        repo_id="guangyangmusic/PDMX-Synth",
+        repo_type="dataset",
+        local_dir=local_data_path,
+        local_dir_use_symlinks=False,
+    )
+
+    # 2. Load the dataset from the local parquet files
+    print("Loading dataset from local parquet files...")
+    try:
+        data_files = {
+            "train": f"{local_data_path}/data/train-*.parquet",
+            "val": f"{local_data_path}/data/val-*.parquet",
+            "test": f"{local_data_path}/data/test-*.parquet",
+        }
+        dataset = load_dataset(
+            "parquet", data_files=data_files, cache_dir=local_data_path
+        )
+    except Exception as e:
+        print(f"Error loading local dataset: {e}")
+        return
     for split in TARGET_SPLITS:
         if split not in dataset:
             continue
